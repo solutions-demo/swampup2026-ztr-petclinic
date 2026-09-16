@@ -21,16 +21,30 @@ jobs:
           distribution: temurin
           java-version: "21"
 
-      - name: Set up JFrog CLI
-        uses: jfrog/setup-jfrog-cli@v4
-
-      - name: Configure JFrog CLI for solenglatest
+      - name: Write Maven settings.xml mirroring everything through maven-selfheal-virtual
         run: |
-          jf c add solenglatest --url="${{ secrets.JFROG_URL }}" --access-token="${{ secrets.JFROG_ACCESS_TOKEN }}" --interactive=false
-          jf mvn-config --server-id-resolve=solenglatest --repo-resolve-releases=maven-selfheal-virtual --repo-resolve-snapshots=maven-selfheal-virtual
+          mkdir -p /tmp/m2
+          cat > /tmp/m2/settings.xml <<SETTINGSEOF
+          <settings>
+            <servers>
+              <server>
+                <id>artifactory-release</id>
+                <username>su26-ztr-ci-bot</username>
+                <password>${{ secrets.JFROG_ACCESS_TOKEN }}</password>
+              </server>
+            </servers>
+            <mirrors>
+              <mirror>
+                <id>artifactory-release</id>
+                <url>https://${{ secrets.JFROG_URL }}/artifactory/maven-selfheal-virtual</url>
+                <mirrorOf>*</mirrorOf>
+              </mirror>
+            </mirrors>
+          </settings>
+          SETTINGSEOF
 
       - name: Build with Maven, resolving through maven-selfheal-virtual
-        run: jf mvn -B -q -DskipTests package
+        run: mvn -s /tmp/m2/settings.xml -B -DskipTests package
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
