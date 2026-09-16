@@ -179,3 +179,22 @@ For additional details, please refer to the blog post [Hello DCO, Goodbye CLA: S
 ## License
 
 The Spring PetClinic sample application is released under version 2.0 of the [Apache License](https://www.apache.org/licenses/LICENSE-2.0).
+
+## SwampUp 2026 — Zero Touch Remediation demo
+
+This fork of spring-petclinic exists to demo JFrog's Zero Touch Remediation
+(self-healing) capability at SwampUp 2026, on the shared `solenglatest`
+JFrog Platform instance.
+
+- `pom.xml` deliberately pins `org.yaml:snakeyaml:1.30`, a version affected by
+  a real, known vulnerability (CVE-2022-1471, Constructor deserialization RCE,
+  fixed in 1.31). This is intentional demo content, not an oversight.
+- `.github/workflows/build-and-push.yml` builds this app and pushes it as
+  `petclinic:vulnerable-<sha>` to solenglatest's `base-image-remediation-demo`
+  Docker repo (ZTR-enabled) on every push to `main`.
+- `.github/workflows/patch.yml` (manual `workflow_dispatch`) removes the
+  vulnerable SnakeYAML pin, rebuilds, and pushes `petclinic:patched-<sha>` —
+  the "after remediation" image for the demo.
+
+To re-run the demo live: push any commit to `main` (vulnerable image), then
+trigger `Patch and Push` from the Actions tab (patched image).

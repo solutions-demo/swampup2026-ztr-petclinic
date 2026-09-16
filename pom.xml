@@ -38,6 +38,19 @@
   </properties>
 
   <dependencies>
+    <!--
+      SwampUp 2026 ZTR demo: intentionally pinned to a known-vulnerable version
+      (CVE-2022-1471, SnakeYAML Constructor deserialization RCE, fixed in 1.31)
+      instead of the version Spring Boot's parent BOM would otherwise manage.
+      This is deliberate demo content for the Zero Touch Remediation booth demo
+      (see .github/workflows/) - not an oversight. The "patch" workflow removes
+      this override so the build falls back to Boot's managed, compliant version.
+    -->
+    <dependency>
+      <groupId>org.yaml</groupId>
+      <artifactId>snakeyaml</artifactId>
+      <version>1.30</version>
+    </dependency>
     <!-- Spring and Spring Boot dependencies -->
     <dependency>
       <groupId>org.springframework.boot</groupId>
