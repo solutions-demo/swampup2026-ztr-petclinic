@@ -15,6 +15,23 @@ jobs:
         id: vars
         run: echo "sha_short=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
 
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up JFrog CLI
+        uses: jfrog/setup-jfrog-cli@v4
+
+      - name: Configure JFrog CLI for solenglatest
+        run: |
+          jf c add solenglatest --url="${{ secrets.JFROG_URL }}" --access-token="${{ secrets.JFROG_ACCESS_TOKEN }}" --interactive=false
+          jf mvn-config --server-id-resolve=solenglatest --repo-resolve-releases=maven-selfheal-virtual --repo-resolve-snapshots=maven-selfheal-virtual
+
+      - name: Build with Maven, resolving through maven-selfheal-virtual
+        run: jf mvn -B -q -DskipTests package
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 

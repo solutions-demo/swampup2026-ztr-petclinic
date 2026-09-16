@@ -1,5 +1,13 @@
 name: Patch and Push (SwampUp 2026 ZTR demo - remediation)
 
+# Note: no "Remediation Automation" / auto-PR REST API was discoverable on
+# this instance (undocumented in the jfrog skill's references, no matching
+# endpoint found), so this workflow scripts the version bump itself rather
+# than relying on a native platform automation. The remediation is still
+# real: the compliant log4j-core build genuinely only exists in
+# chainguard-java, resolved through the same ZTR-enabled maven-selfheal-virtual
+# repo used for the vulnerable build - nothing here is source-patched by hand.
+
 on:
   workflow_dispatch: {}
 
@@ -13,24 +21,48 @@ jobs:
         id: vars
         run: echo "sha_short=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
 
-      - name: Remove the deliberately-vulnerable SnakeYAML pin (CVE-2022-1471)
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up JFrog CLI
+        uses: jfrog/setup-jfrog-cli@v4
+
+      - name: Configure JFrog CLI for solenglatest
         run: |
-          python3 - <<'PYEOF'
-          import re
+          jf c add solenglatest --url="${{ secrets.JFROG_URL }}" --access-token="${{ secrets.JFROG_ACCESS_TOKEN }}" --interactive=false
+          jf mvn-config --server-id-resolve=solenglatest --repo-resolve-releases=maven-selfheal-virtual --repo-resolve-snapshots=maven-selfheal-virtual
+
+      - name: Bump log4j-core to chainguard-java's compliant version
+        run: |
+          COMPLIANT_VERSION=$(jf api --server-id solenglatest \
+            "/artifactory/chainguard-java/org/apache/logging/log4j/log4j-core/maven-metadata.xml" \
+            | grep -oE '<release>[^<]+</release>' | sed -E 's#</?release>##g')
+          if [ -z "$COMPLIANT_VERSION" ]; then
+            echo "Could not determine compliant version from chainguard-java" >&2
+            exit 1
+          fi
+          echo "Compliant version from chainguard-java: $COMPLIANT_VERSION"
+          python3 - "$COMPLIANT_VERSION" <<'PYEOF'
+          import re, sys
+          version = sys.argv[1]
           with open("pom.xml") as f:
               content = f.read()
           pattern = re.compile(
-              r"\s*<!--\n\s*SwampUp 2026 ZTR demo:.*?-->\n\s*<dependency>\s*"
-              r"<groupId>org\.yaml</groupId>\s*<artifactId>snakeyaml</artifactId>\s*"
-              r"<version>1\.30</version>\s*</dependency>\n",
-              re.DOTALL,
+              r"(<groupId>org\.apache\.logging\.log4j</groupId>\s*"
+              r"<artifactId>log4j-core</artifactId>\s*<version>)[^<]+(</version>)"
           )
-          new_content, n = pattern.subn("\n", content)
+          new_content, n = pattern.subn(rf"\g<1>{version}\g<2>", content)
           assert n == 1, f"expected exactly 1 match, got {n}"
           with open("pom.xml", "w") as f:
               f.write(new_content)
+          print(f"pom.xml log4j-core version set to {version}")
           PYEOF
-          echo "Removed vulnerable SnakeYAML override - build now falls back to Spring Boot's managed, compliant version."
+
+      - name: Build patched jar, resolving through maven-selfheal-virtual
+        run: jf mvn -B -q -DskipTests package
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
