@@ -29,6 +29,12 @@ jobs:
 
       - name: Set up JFrog CLI
         uses: jfrog/setup-jfrog-cli@v4
+        env:
+          JF_URL: https://${{ secrets.JFROG_URL }}
+          JF_ACCESS_TOKEN: ${{ secrets.JFROG_ACCESS_TOKEN }}
+        with:
+          version: latest
+          custom-server-id: solenglatest
 
       - name: Bump log4j-core to chainguard-java's compliant version
         run: |
@@ -56,30 +62,15 @@ jobs:
           print(f"pom.xml log4j-core version set to {version}")
           PYEOF
 
-      - name: Write Maven settings.xml mirroring everything through maven-selfheal-virtual
+      - name: Configure Maven resolution/deployment through maven-selfheal-virtual
         run: |
-          mkdir -p /tmp/m2
-          cat > /tmp/m2/settings.xml <<SETTINGSEOF
-          <settings>
-            <servers>
-              <server>
-                <id>artifactory-release</id>
-                <username>su26-ztr-ci-bot</username>
-                <password>${{ secrets.JFROG_ACCESS_TOKEN }}</password>
-              </server>
-            </servers>
-            <mirrors>
-              <mirror>
-                <id>artifactory-release</id>
-                <url>https://${{ secrets.JFROG_URL }}/artifactory/maven-selfheal-virtual</url>
-                <mirrorOf>*</mirrorOf>
-              </mirror>
-            </mirrors>
-          </settings>
-          SETTINGSEOF
+          jf mvn-config \
+            --server-id-resolve=solenglatest --server-id-deploy=solenglatest \
+            --repo-resolve-releases=maven-selfheal-virtual --repo-resolve-snapshots=maven-selfheal-virtual \
+            --repo-deploy-releases=maven-selfheal-virtual --repo-deploy-snapshots=maven-selfheal-virtual
 
-      - name: Build patched jar, resolving through maven-selfheal-virtual
-        run: mvn -s /tmp/m2/settings.xml -B -DskipTests package
+      - name: Build patched jar with jf mvn, resolving through maven-selfheal-virtual
+        run: jf mvn -B -DskipTests package
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
